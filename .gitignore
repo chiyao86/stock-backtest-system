@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# 回測報告
+回測報告/
+
+# 環境變數
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# 其他
+*.log
+.DS_Store
