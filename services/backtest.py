@@ -178,6 +178,11 @@ def run_backtest(df: pd.DataFrame,
 # ═══════════════════════════════════════════════════════
 def print_stats(portfolio: vbt.Portfolio, init_cash: float = INIT_CASH):
     """印出核心績效指標 + 每筆交易成本/獲利/持有時間"""
+    # 檢查資料是否為空
+    if len(portfolio.wrapper.index) == 0:
+        print("⚠️  回測資料為空，無法生成績效報告")
+        return
+    
     stats  = portfolio.stats()
     trades = portfolio.trades.records_readable
 
@@ -523,15 +528,28 @@ def run_full_backtest(symbol: str, start: str, end: str,
     """完整流程：載入 → 計算指標 → 技術分析圖 → 產生訊號 → 回測 → 報告"""
     df = load_data(symbol, start, end)
     if df.empty:
+        print(f"❌ {symbol} 在指定日期範圍內無資料")
         return None
 
     df = calc_indicators(df)
+    
+    # 過濾掉 NaN 值
+    df_clean = df.dropna()
+    if len(df_clean) < 60:  # 至少需要 60 筆資料（因為 SMA60）
+        print(f"⚠️  {symbol} 有效資料不足（僅 {len(df_clean)} 筆），建議至少 60 筆以上")
+        return None
+    
     plot_analysis(df, symbol)
 
     entries, exits = get_signals(df, strategy=strategy)
     pf = run_backtest(df, entries, exits,
                       init_cash=init_cash, fees=fees, slippage=slippage)
 
+    # 檢查回測資料是否有效
+    if len(pf.wrapper.index) == 0:
+        print(f"⚠️  {symbol} 回測資料為空，無法生成報告")
+        return None
+    
     print_stats(pf, init_cash=init_cash)
     plot_portfolio(pf, symbol, strategy)
     export_quantstats(pf, symbol, strategy)
@@ -543,12 +561,22 @@ def run_all_strategies(symbol: str, start: str, end: str,
                        init_cash: float = INIT_CASH,
                        fees: float = DEFAULT_FEES,
                        slippage: float = DEFAULT_SLIPPAGE) -> dict:
-    """跑全部 3 種策略，回傳 {strategy: portfolio}"""
+    """跑全部策略（目前只有 sma_cross），回傳 {strategy: portfolio}"""
     df = load_data(symbol, start, end)
     if df.empty:
+        print(f"❌ {symbol} 在指定日期範圍 ({start} ~ {end}) 內無資料")
+        print(f"   請確認：1) 已執行爬蟲  2) 日期範圍正確  3) 股票代碼正確")
         return {}
 
     df = calc_indicators(df)
+    
+    # 過濾掉 NaN 值並檢查資料量
+    df_clean = df.dropna()
+    if len(df_clean) < 60:
+        print(f"⚠️  {symbol} 有效資料不足（僅 {len(df_clean)} 筆）")
+        print(f"   建議：爬取至少 60 天以上的歷史資料（因為需要計算 SMA60）")
+        return {}
+    
     plot_analysis(df, symbol)
 
     results = {}
@@ -561,6 +589,11 @@ def run_all_strategies(symbol: str, start: str, end: str,
         pf = run_backtest(df, entries, exits,
                           init_cash=init_cash, fees=fees, slippage=slippage)
 
+        # 檢查回測資料是否有效
+        if len(pf.wrapper.index) == 0:
+            print(f"⚠️  {symbol} [{strat}] 回測資料為空，跳過此策略")
+            continue
+        
         print_stats(pf, init_cash=init_cash)
         plot_portfolio(pf, symbol, strat)
         export_quantstats(pf, symbol, strat,
